@@ -7,7 +7,7 @@
 
 # Rein
 
-A cross-platform, remote desktop (started as a couch keyboard replacement utilizing touch-screen devices following the **KISS principle**. It allows touchscreen devices to act as a trackpad and keyboard for a desktop system through a locally served web interface. This can serve as a standard open interface for upcoming cloud PC/gaming services. The project also bring better STT for Linux via phone and other platforms.
+A cross-platform, remote desktop (started as a couch keyboard replacement utilizing touch-screen devices following the **KISS principle**. It allows touchscreen devices and non touch desktop to act as a trackpad and keyboard for a desktop system through a locally served web interface. Think this could become some sort of standardization for cloud PC or cloud gaming interfaces, where all providers can push improvements and make them directly available to all platforms. Then upcoming providers would only need to think about the infrastructure. The project also bring better STT for Linux via phone and other platforms.
 
 > Contributions are welcome! Please leave a star ⭐ to show your support.
 
