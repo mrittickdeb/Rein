@@ -64,7 +64,6 @@ import { LinuxTouch } from "./touch.ts"
 import { LINUX_KEY_MAP } from "../keyMap.ts"
 import type { InputConfig, TouchContact } from "../types.ts"
 import { DEFAULT_CONFIG } from "../constants.ts"
-import { applyMotion } from "../utils.ts"
 
 if (process.platform !== "linux") {
 	throw new Error("LinuxInputInjector can only be used on Linux")
@@ -217,7 +216,7 @@ export class LinuxInputInjector {
 		const invert = this.config.invertScroll ? -1 : 1
 
 		if (dy !== 0) {
-			// Positive dy = scroll down on trackpad 
+			// Positive dy = scroll down on trackpad
 			const amount = Math.round(-dy * invert * WHEEL_SCALE)
 			writeEvent(fd, EV_REL, REL_WHEEL, amount)
 		}
@@ -228,7 +227,7 @@ export class LinuxInputInjector {
 		writeEvent(fd, EV_SYN, SYN_REPORT, 0)
 	}
 
-	// Keyboard 
+	// Keyboard
 	injectKey(key: string): void {
 		this.keyboard?.injectKey(key)
 	}

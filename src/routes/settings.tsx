@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router"
 import QRCode from "qrcode"
-import { useEffect, useState, useRef, useMemo } from "react"
+import { useEffect, useState, useRef } from "react"
 import { APP_CONFIG, THEMES } from "../config"
 import serverConfig from "../server-config.json"
 import { useRemoteConnection } from "../hooks/useRemoteConnection"

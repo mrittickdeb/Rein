@@ -9,6 +9,7 @@
 import os from "node:os"
 import path from "node:path"
 import { applyMotion } from "./drivers/utils"
+import { WindowsInputInjector } from "./drivers/windows/index"
 export interface InputMessage {
 	type:
 		| "move"
@@ -91,11 +92,6 @@ export class InputHandler {
 
 		if (plat === "win32") {
 			this.platform = "win32"
-			const winPath = path.join(
-				process.cwd(),
-				"src/server/drivers/windows/index.ts",
-			)
-			const { WindowsInputInjector } = require(winPath)
 			this.injector = new WindowsInputInjector(this.config) as PlatformInjector
 		} else if (plat === "linux") {
 			this.platform = "linux"

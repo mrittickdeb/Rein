@@ -1,7 +1,6 @@
 "use client"
 
 import type React from "react"
-import { useRef } from "react"
 import { useConnection } from "../../contexts/ConnectionProvider"
 import { useMirrorStream } from "../../hooks/useMirrorStream"
 

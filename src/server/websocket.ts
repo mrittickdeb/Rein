@@ -1,5 +1,5 @@
 import fs from "node:fs"
-import { get, type IncomingMessage } from "node:http"
+import type { IncomingMessage } from "node:http"
 import type { Socket } from "node:net"
 import { WebSocket, WebSocketServer } from "ws"
 import logger from "../utils/logger"
@@ -40,7 +40,7 @@ export async function createWsServer(
 			logger.warn(`Invalid server-config.json, using defaults: ${String(e)}`)
 		}
 	}
-	const inputThrottleMs =
+	const _inputThrottleMs =
 		typeof serverConfig.inputThrottleMs === "number" &&
 		serverConfig.inputThrottleMs > 0
 			? serverConfig.inputThrottleMs
@@ -123,9 +123,7 @@ export async function createWsServer(
 			let inputHandler: InputHandler | null = null
 			if (!inputHandler) {
 				inputHandler = new InputHandler()
-				console.log(
-					`[WebSocket] InputHandler initialized with throttle ${inputHandler["throttleMs"]}ms`,
-				)
+				console.log(`[WebSocket] InputHandler initialized`)
 			}
 			if (token && (isKnownToken(token) || !isLocal)) {
 				storeToken(token)
