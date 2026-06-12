@@ -71,11 +71,21 @@ export class LinuxKeyboard {
 			}
 
 			if (shifted) {
+				const shiftCode = LINUX_KEY_MAP.shift
+				if (shiftCode === undefined) {
+					console.warn("[LinuxKeyboard] Shift key code not defined in key map")
+					continue
+				}
 				this.sendKeyEvent(LINUX_KEY_MAP.shift ?? 0, KEY_PRESS)
 			}
 			this.sendKeyEvent(code, KEY_PRESS)
 			this.sendKeyEvent(code, KEY_RELEASE)
 			if (shifted) {
+				const shiftCode = LINUX_KEY_MAP.shift
+				if (shiftCode === undefined) {
+					console.warn("[LinuxKeyboard] Shift key code not defined in key map")
+					continue
+				}
 				this.sendKeyEvent(LINUX_KEY_MAP.shift ?? 0, KEY_RELEASE)
 			}
 			this.sync()

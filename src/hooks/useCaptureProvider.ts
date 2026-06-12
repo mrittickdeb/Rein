@@ -102,6 +102,8 @@ export function useCaptureProvider(wsRef: React.RefObject<WebSocket | null>) {
 			}
 
 			const video = videoRef.current
+			const track = stream.getVideoTracks()[0]
+			const settings = track.getSettings()
 			video.srcObject = stream
 			await video.play()
 
@@ -110,7 +112,14 @@ export function useCaptureProvider(wsRef: React.RefObject<WebSocket | null>) {
 
 			if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
 				wsRef.current.send(
-					JSON.stringify({ type: "start-provider", config: getConfig() }),
+					JSON.stringify({
+						type: "start-provider",
+						config: {
+							...getConfig(),
+							screenWidth: settings.width,
+							screenHeight: settings.height,
+						},
+					}),
 				)
 			}
 

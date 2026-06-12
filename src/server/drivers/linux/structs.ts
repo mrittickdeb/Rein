@@ -66,7 +66,11 @@ export function openUinput(path: string): number {
 	if (!_open) {
 		throw new Error("libc not initialized")
 	}
-	return _open(path, O_WRONLY | O_NONBLOCK) as number
+	const fd = _open(path, O_WRONLY | O_NONBLOCK) as number
+	if (fd < 0) {
+		throw new Error(`Failed to open ${path}, got fd ${fd} (check permissions and /dev/uinput availability)`)
+	}
+	return fd
 }
 
 export function closeUinput(fd: number): void {
@@ -91,7 +95,10 @@ export function writeEvent(
 	const written = _write(fd, ev, INPUT_EVENT_SIZE) as number
 	return written === INPUT_EVENT_SIZE
 }
-
+/**
+ * Perform an ioctl call with an integer argument.
+ * `@returns` 0 on success, -1 on error (check errno via native means if needed)
+ */
 export function ioctlInt(fd: number, request: number, value: number): number {
 	ensureLibc()
 	if (!_ioctl) {

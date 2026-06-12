@@ -21,7 +21,7 @@ import {
 	TOUCH_MASK_CONTACTAREA,
 	MAX_CONTACTS,
 } from "./constants"
-import type { TouchContact } from "../types"
+import type { TouchContact } from "../../types"
 
 export class WindowsTouch {
 	private hDevice: bigint | null = null
@@ -47,8 +47,13 @@ export class WindowsTouch {
 		)
 
 		if (handle) {
-			this.hDevice = koffi.address(handle)
-			console.log("[WindowsTouch] Touch device initialized")
+			try {
+				this.hDevice = koffi.address(handle)
+				console.log("[WindowsTouch] Touch device initialized")
+			} catch (e) {
+				console.error("[WindowsTouch] Failed to initialize touch device:", e)
+				return
+			}
 		} else {
 			console.error("[WindowsTouch] Failed to create touch device")
 		}
@@ -61,7 +66,7 @@ export class WindowsTouch {
 		const id = this.freePointerIds.pop()
 		if (id === undefined) {
 			console.warn("[WindowsTouch] Max contacts reached")
-			return 0
+			throw new Error("Cannot allocate pointer ID: max contacts reached")
 		}
 		this.contactIdMap.set(sourceId, id)
 		return id
@@ -153,8 +158,12 @@ export class WindowsTouch {
 					.pointerId,
 		)
 
-		if (InjectPointerInput(this.hDevice, frame, frame.length)) {
-			this.currentFrameId = (this.currentFrameId % 0xffffffff) + 1
+		try {
+			if (InjectPointerInput(this.hDevice, frame, frame.length)) {
+				this.currentFrameId = (this.currentFrameId % 0xffffffff) + 1
+			}
+		} catch (e) {
+			console.error("[WindowsTouch] Error injecting pointer input:", e)
 		}
 
 		for (const id of releasedIds) {
@@ -185,6 +194,9 @@ export class WindowsTouch {
 			this.hDevice = null
 			this.contactIdMap.clear()
 			this.freePointerIds = []
+			for (let i = MAX_CONTACTS - 1; i >= 0; i--) {
+				this.freePointerIds.push(i)
+			}
 			this.primarySourceId = null
 		}
 	}

@@ -18,11 +18,10 @@ import {
 	MOUSEEVENTF_HWHEEL,
 	WHEEL_DELTA,
 } from "./constants"
-import { INPUT_MOUSE, DEFAULT_CONFIG } from "../constants"
-import type { InputConfig, TouchContact } from "../types"
+import { INPUT_MOUSE, DEFAULT_CONFIG } from "../../constants"
+import type { InputConfig, TouchContact } from "../../types"
 import { WindowsKeyboard } from "./keyboard"
 import { WindowsTouch } from "./touch"
-
 
 if (process.platform !== "win32") {
 	throw new Error("WindowsInputInjector can only be used on Windows")
@@ -161,7 +160,7 @@ export class WindowsInputInjector {
 		this.touch.injectTouch(contacts)
 	}
 
-	//Cleanup 
+	// Cleanup
 	destroy(): void {
 		this.touch.destroy()
 	}

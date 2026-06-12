@@ -14,20 +14,18 @@ import {
 	kCGEventRightMouseUp,
 	kCGEventOtherMouseDown,
 	kCGEventOtherMouseUp,
+	kCGEventOtherMouseDragged,
 	kCGEventLeftMouseDragged,
+	kCGEventRightMouseDragged,
 	kCGMouseButtonLeft,
 	kCGMouseButtonRight,
 	kCGMouseButtonCenter,
 } from "./constants.ts"
-import {
-	DEFAULT_SCREEN_WIDTH,
-	DEFAULT_SCREEN_HEIGHT,
-	WHEEL_SCALE,
-} from "../constants.ts"
+import { WHEEL_SCALE } from "../../constants.ts"
 import { MacKeyboard } from "./keyboard.ts"
 import { MacTouch } from "./touch.ts"
-import type { InputConfig, TouchContact } from "../types.ts"
-import { DEFAULT_CONFIG } from "../constants.ts"
+import type { InputConfig, TouchContact } from "../../types.ts"
+import { DEFAULT_CONFIG } from "../../constants.ts"
 
 if (process.platform !== "darwin") {
 	throw new Error("MacInputInjector can only be used on macOS")
@@ -43,13 +41,13 @@ const BUTTON_MAP = {
 	right: {
 		down: kCGEventRightMouseDown,
 		up: kCGEventRightMouseUp,
-		drag: kCGEventLeftMouseDragged,
+		drag: kCGEventRightMouseDragged,
 		btn: kCGMouseButtonRight,
 	},
 	middle: {
 		down: kCGEventOtherMouseDown,
 		up: kCGEventOtherMouseUp,
-		drag: kCGEventLeftMouseDragged,
+		drag: kCGEventOtherMouseDragged,
 		btn: kCGMouseButtonCenter,
 	},
 } as const
@@ -60,8 +58,6 @@ export class MacInputInjector {
 	private touch: MacTouch
 	private cursorX = 0
 	private cursorY = 0
-	private screenWidth = DEFAULT_SCREEN_WIDTH
-	private screenHeight = DEFAULT_SCREEN_HEIGHT
 
 	private buttonsHeld = new Set<"left" | "right" | "middle">()
 
@@ -70,8 +66,8 @@ export class MacInputInjector {
 		this.keyboard = new MacKeyboard()
 		this.touch = new MacTouch()
 		// Seed cursor at screen centre so the first relative move is reasonable.
-		this.cursorX = this.screenWidth / 2
-		this.cursorY = this.screenHeight / 2
+		this.cursorX = this.config.screenWidth / 2
+		this.cursorY = this.config.screenHeight / 2
 	}
 
 	updateConfig(config: Partial<InputConfig>): void {
@@ -82,13 +78,31 @@ export class MacInputInjector {
 
 	injectMouseMove(dx: number, dy: number): void {
 		if (dx === 0 && dy === 0) return
-		this.cursorX = Math.max(0, Math.min(this.screenWidth, this.cursorX + dx))
-		this.cursorY = Math.max(0, Math.min(this.screenHeight, this.cursorY + dy))
+		this.cursorX = Math.max(
+			0,
+			Math.min(this.config.screenWidth, this.cursorX + dx),
+		)
+		this.cursorY = Math.max(
+			0,
+			Math.min(this.config.screenHeight, this.cursorY + dy),
+		)
 
 		let eventType = kCGEventMouseMoved
-		if (this.buttonsHeld.has("left")) eventType = kCGEventLeftMouseDragged
+		let button = kCGMouseButtonLeft
+		if (this.buttonsHeld.has("left")) {
+			eventType = kCGEventLeftMouseDragged
+			button = kCGMouseButtonLeft
+		}
+		if (this.buttonsHeld.has("right")) {
+			eventType = kCGEventRightMouseDragged
+			button = kCGMouseButtonRight
+		}
+		if (this.buttonsHeld.has("middle")) {
+			eventType = kCGEventOtherMouseDragged
+			button = kCGMouseButtonCenter
+		}
 
-		postMouseEvent(eventType, this.cursorX, this.cursorY, kCGMouseButtonLeft)
+		postMouseEvent(eventType, this.cursorX, this.cursorY, button)
 	}
 
 	injectMouseButton(

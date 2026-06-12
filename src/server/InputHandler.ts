@@ -7,69 +7,23 @@
  * mouse, keyboard, touch, clipboard, and gesture interactions.
  */
 import os from "node:os"
-import path from "node:path"
 import { applyMotion } from "./drivers/utils"
-import { WindowsInputInjector } from "./drivers/windows/index"
-export interface InputMessage {
-	type:
-		| "move"
-		| "paste"
-		| "copy"
-		| "click"
-		| "scroll"
-		| "key"
-		| "text"
-		| "zoom"
-		| "combo"
-		| "touch"
-		| "update-settings"
-	dx?: number
-	dy?: number
-	config?: Partial<InputConfig>
-	button?: "left" | "right" | "middle"
-	press?: boolean
-	key?: string
-	keys?: string[]
-	text?: string
-	delta?: number
-	contacts?: Array<{
-		id: number
-		x: number
-		y: number
-		state: "down" | "move" | "up"
-	}>
-}
-
-export interface InputConfig {
-	sensitivity: number
-	invertScroll: boolean
-	acceleration: boolean
-}
-
-type PlatformInjector = {
-	updateConfig(config: Partial<InputConfig>): void
-	injectMouseMove(dx: number, dy: number): void
-	injectMouseButton(button: "left" | "right" | "middle", isDown: boolean): void
-	injectMouseWheel(dx: number, dy: number): void
-	injectKey(key: string): void
-	injectCombo(keys: string[]): void
-	injectText(text: string): void
-	injectTouch(contacts: NonNullable<InputMessage["contacts"]>): void
-	destroy(): void
-}
+import {
+	DEFAULT_SCREEN_HEIGHT,
+	DEFAULT_SCREEN_WIDTH,
+	MAX_TEXT_LENGTH,
+	MAX_COMBO_KEYS,
+	MAX_COORD,
+	MAX_KEY_LENGTH,
+} from "./constants.ts"
+import type { InputConfig, InputMessage, PlatformInjector } from "./types.ts"
 
 const VALID_BUTTONS = ["left", "right", "middle"] as const
 type MouseButton = (typeof VALID_BUTTONS)[number]
 
-const MAX_COORD = 2000
-const MAX_TEXT_LENGTH = 500
-const MAX_COMBO_KEYS = 10
-const MAX_KEY_LENGTH = 50
-
 export class InputHandler {
 	private injector: PlatformInjector
 	private platform: "win32" | "linux" | "darwin" | "other"
-
 	private lastMoveTime = 0
 	private lastScrollTime = 0
 	private pendingMove: InputMessage | null = null
@@ -82,6 +36,8 @@ export class InputHandler {
 		sensitivity: 1.0,
 		invertScroll: false,
 		acceleration: true,
+		screenWidth: DEFAULT_SCREEN_WIDTH,
+		screenHeight: DEFAULT_SCREEN_HEIGHT,
 	}
 
 	constructor(config: Partial<InputConfig> = {}, throttleMs = 8) {
@@ -92,22 +48,15 @@ export class InputHandler {
 
 		if (plat === "win32") {
 			this.platform = "win32"
+			const { WindowsInputInjector } = require("./drivers/windows")
 			this.injector = new WindowsInputInjector(this.config) as PlatformInjector
 		} else if (plat === "linux") {
 			this.platform = "linux"
-			const linuxPath = path.join(
-				process.cwd(),
-				"src/server/drivers/linux/index.ts",
-			)
-			const { LinuxInputInjector } = require(linuxPath)
+			const { LinuxInputInjector } = require("./drivers/linux")
 			this.injector = new LinuxInputInjector(this.config) as PlatformInjector
 		} else if (plat === "darwin") {
 			this.platform = "darwin"
-			const macPath = path.join(
-				process.cwd(),
-				"src/server/drivers/mac/index.ts",
-			)
-			const { MacInputInjector } = require(macPath)
+			const { MacInputInjector } = require("./drivers/mac")
 			this.injector = new MacInputInjector(this.config) as PlatformInjector
 		} else {
 			this.platform = "other"
@@ -293,7 +242,12 @@ export class InputHandler {
 			}
 
 			case "text": {
-				if (!msg.text || typeof msg.text !== "string") break
+				if (
+					!msg.text ||
+					typeof msg.text !== "string" ||
+					msg.text.length > MAX_TEXT_LENGTH
+				)
+					break
 				this.injector.injectText(msg.text)
 				break
 			}

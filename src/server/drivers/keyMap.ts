@@ -212,7 +212,6 @@ export const MAC_KEY_MAP: Record<string, number> = {
 	fn: 0x3f,
 	capslock: 0x39,
 
-	
 	f1: 0x7a,
 	f2: 0x78,
 	f3: 0x63,
@@ -234,7 +233,6 @@ export const MAC_KEY_MAP: Record<string, number> = {
 	f19: 0x50,
 	f20: 0x5a,
 
-
 	arrowup: 0x7e,
 	arrowdown: 0x7d,
 	arrowleft: 0x7b,
@@ -243,11 +241,10 @@ export const MAC_KEY_MAP: Record<string, number> = {
 	end: 0x77,
 	pageup: 0x74,
 	pagedown: 0x79,
-	insert: 0x72, 
+	insert: 0x72,
 	delete: 0x75,
 	forwarddelete: 0x75,
 
-	
 	backspace: 0x33,
 	tab: 0x30,
 	enter: 0x24,

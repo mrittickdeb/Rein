@@ -1,5 +1,6 @@
 import { SHIFTED_CHARS } from "./keyMap.ts"
-import type { InputConfig } from "./types.ts"
+import type { InputConfig } from "../types.ts"
+import { ACCEL_THRESHOLD, ACCEL_FACTOR, ACCEL_EXPONENT } from "../constants.ts"
 
 export function applyMotion(
 	dx: number,
@@ -12,9 +13,9 @@ export function applyMotion(
 	if (!config.acceleration) return { ax: sdx, ay: sdy }
 
 	const mag = Math.sqrt(sdx * sdx + sdy * sdy)
-	if (mag < 1) return { ax: sdx, ay: sdy }
+	if (mag < ACCEL_THRESHOLD) return { ax: sdx, ay: sdy }
 
-	const acc = mag ** 1.2 * 0.8
+	const acc = mag ** ACCEL_EXPONENT * ACCEL_FACTOR
 	const ratio = acc / mag
 	return { ax: sdx * ratio, ay: sdy * ratio }
 }

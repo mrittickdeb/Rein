@@ -91,7 +91,6 @@ export function postKeyEvent(keyCode: number, keyDown: boolean): void {
 	_CFRelease?.(ref)
 }
 
-
 export function postScrollEvent(deltaX: number, deltaY: number): void {
 	ensureFunctions()
 	const ref = _CGEventCreateScrollWheelEvent?.(

@@ -47,15 +47,20 @@ export class MacKeyboard {
 		if (!text) return
 		for (const ch of text) {
 			const { code, shifted } = resolveChar(ch, MAC_KEY_MAP)
+			const shiftCode = MAC_KEY_MAP.shift
 			if (code === undefined) {
 				// Fall back to Unicode injection for unmapped characters.
 				this.injectUnicodeChar(ch)
 				continue
 			}
-			if (shifted) postKeyEvent(MAC_KEY_MAP.shift ?? 0, true)
+			if (shiftCode === undefined) {
+				console.warn("[MacKeyboard] Shift key code not defined in key map")
+				continue
+			}
+			if (shifted) postKeyEvent(shiftCode, true)
 			postKeyEvent(code, true)
 			postKeyEvent(code, false)
-			if (shifted) postKeyEvent(MAC_KEY_MAP.shift ?? 0, false)
+			if (shifted) postKeyEvent(shiftCode, false)
 		}
 	}
 	private injectUnicodeChar(ch: string): void {

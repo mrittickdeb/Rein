@@ -27,11 +27,11 @@ import {
 	MAX_CONTACTS,
 	MT_TRACKING_ID_RELEASED,
 } from "./constants.ts"
-import type { TouchContact } from "../types.ts"
+import type { TouchContact } from "../../types.ts"
 
 export class LinuxTouch {
 	private fd: number
-	// slot :tracking id 
+	// slot :tracking id
 	private slotTrackingIds: Int32Array
 	// sourceId :slot index
 	private contactSlotMap = new Map<number, number>()

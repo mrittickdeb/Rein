@@ -14,8 +14,8 @@ import {
 	kCGMouseButtonLeft,
 } from "./constants.ts"
 import { MAC_KEY_MAP } from "../keyMap.ts"
-import type { TouchContact } from "../types.ts"
-
+import type { TouchContact } from "../../types.ts"
+import { PINCH_PAN_THRESHOLD } from "../../constants.ts"
 interface TrackedContact {
 	id: number
 	x: number
@@ -144,7 +144,7 @@ export class MacTouch {
 		const newSpread = spread(a, b)
 		const delta = newSpread - this.pinch.lastSpread
 
-		const isPinch = Math.abs(delta) > 1 // px threshold to distinguish pan from pinch
+		const isPinch = Math.abs(delta) > PINCH_PAN_THRESHOLD // px threshold to distinguish pan from pinch
 		const isPan = !isPinch
 
 		if (isPinch) {
@@ -172,7 +172,13 @@ export class MacTouch {
 		const lines = Math.round(spreadDelta * PINCH_SCROLL_SCALE)
 		if (lines === 0) return
 
-		const ctrlCode = MAC_KEY_MAP.control ?? 0
+		const ctrlCode = MAC_KEY_MAP.control
+		if (ctrlCode === undefined) {
+			console.warn(
+				"[MacTouch] Control key code not defined in key map — cannot emit pinch zoom",
+			)
+			return
+		}
 		postKeyEvent(ctrlCode, true)
 		postScrollEvent(0, lines)
 		postKeyEvent(ctrlCode, false)

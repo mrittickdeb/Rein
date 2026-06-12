@@ -54,20 +54,13 @@ import {
 	KEY_PRESS,
 	KEY_RELEASE,
 } from "./constants.ts"
-import {
-	DEFAULT_SCREEN_WIDTH,
-	DEFAULT_SCREEN_HEIGHT,
-	WHEEL_SCALE,
-} from "../constants.ts"
+import { WHEEL_SCALE } from "../../constants.ts"
 import { LinuxKeyboard } from "./keyboard.ts"
 import { LinuxTouch } from "./touch.ts"
 import { LINUX_KEY_MAP } from "../keyMap.ts"
-import type { InputConfig, TouchContact } from "../types.ts"
-import { DEFAULT_CONFIG } from "../constants.ts"
+import type { InputConfig, TouchContact } from "../../types.ts"
+import { DEFAULT_CONFIG } from "../../constants.ts"
 
-if (process.platform !== "linux") {
-	throw new Error("LinuxInputInjector can only be used on Linux")
-}
 const BUS_USB = 0x03
 
 class UinputDevice {
@@ -170,11 +163,12 @@ export class LinuxInputInjector {
 	private touchDev = new UinputDevice("Touch")
 	private keyboard: LinuxKeyboard | null = null
 	private touch: LinuxTouch | null = null
-	private screenWidth = DEFAULT_SCREEN_WIDTH
-	private screenHeight = DEFAULT_SCREEN_HEIGHT
 	private initialized = false
 
 	constructor(config: Partial<InputConfig> = {}) {
+		if (process.platform !== "linux") {
+			throw new Error("LinuxInputInjector can only be used on Linux")
+		}
 		this.config = { ...DEFAULT_CONFIG, ...config }
 		this.initialize()
 	}
@@ -336,12 +330,12 @@ export class LinuxInputInjector {
 		// Abs ranges
 		this.touchDev.setupAbs(ABS_MT_SLOT, 0, MAX_CONTACTS - 1)
 		this.touchDev.setupAbs(ABS_MT_TRACKING_ID, -1, 0x7fffffff)
-		this.touchDev.setupAbs(ABS_MT_POSITION_X, 0, this.screenWidth)
-		this.touchDev.setupAbs(ABS_MT_POSITION_Y, 0, this.screenHeight)
+		this.touchDev.setupAbs(ABS_MT_POSITION_X, 0, this.config.screenWidth)
+		this.touchDev.setupAbs(ABS_MT_POSITION_Y, 0, this.config.screenHeight)
 		this.touchDev.setupAbs(ABS_MT_TOUCH_MAJOR, 0, 255)
 		this.touchDev.setupAbs(ABS_MT_PRESSURE, 0, 255)
-		this.touchDev.setupAbs(ABS_X, 0, this.screenWidth)
-		this.touchDev.setupAbs(ABS_Y, 0, this.screenHeight)
+		this.touchDev.setupAbs(ABS_X, 0, this.config.screenWidth)
+		this.touchDev.setupAbs(ABS_Y, 0, this.config.screenHeight)
 
 		return this.touchDev.create("Virtual Touchpad")
 	}

@@ -7,7 +7,7 @@
  */
 import { SendInput, INPUT_STRUCT_SIZE } from "./structs"
 import { KEYEVENTF_KEYUP, KEYEVENTF_UNICODE } from "./constants"
-import { INPUT_KEYBOARD } from "../constants"
+import { INPUT_KEYBOARD } from "../../constants"
 import { VK_MAP } from "../keyMap"
 
 export class WindowsKeyboard {

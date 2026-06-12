@@ -108,6 +108,12 @@ export function SendInput(
 	events: unknown,
 	size: number,
 ): number {
+	if (count < 0 || count > 1000) {
+		throw new Error(`Invalid event count: ${count}`)
+	}
+	if (size !== INPUT_STRUCT_SIZE) {
+		throw new Error(`Size mismatch: expected ${INPUT_STRUCT_SIZE}, got ${size}`)
+	}
 	ensureLib()
 	if (!_SendInput) {
 		throw new Error("Failed to load SendInput from user32.dll")
@@ -134,6 +140,12 @@ export function InjectPointerInput(
 	pointerInfo: unknown,
 	count: number,
 ): number {
+	if (!device) {
+		throw new Error("Invalid device handle")
+	}
+	if (count < 0 || count > 100) {
+		throw new Error(`Invalid pointer count: ${count}`)
+	}
 	ensureLib()
 	if (!_InjectPointerInput) {
 		throw new Error("Failed to load InjectPointerInput from user32.dll")

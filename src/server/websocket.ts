@@ -3,7 +3,8 @@ import type { IncomingMessage } from "node:http"
 import type { Socket } from "node:net"
 import { WebSocket, WebSocketServer } from "ws"
 import logger from "../utils/logger"
-import { InputHandler, type InputMessage } from "./InputHandler"
+import type { InputMessage } from "./types"
+import { InputHandler } from "./InputHandler"
 import { getLocalIp } from "./getLocalIp"
 
 import {
@@ -120,11 +121,7 @@ export async function createWsServer(
 			// Localhost: only store token if it's already known (trusted scan)
 			// Remote: token is already validated in the upgrade handler
 			logger.info(`Client connected from ${request.socket.remoteAddress}`)
-			let inputHandler: InputHandler | null = null
-			if (!inputHandler) {
-				inputHandler = new InputHandler()
-				console.log(`[WebSocket] InputHandler initialized`)
-			}
+			const inputHandler: InputHandler = new InputHandler()
 			if (token && (isKnownToken(token) || !isLocal)) {
 				storeToken(token)
 			}
@@ -350,6 +347,7 @@ export async function createWsServer(
 						"update-settings",
 						"copy",
 						"paste",
+						"touch",
 					]
 					if (!msg.type || !VALID_INPUT_TYPES.includes(msg.type)) {
 						logger.warn(`Unknown message type: ${msg.type}`)
