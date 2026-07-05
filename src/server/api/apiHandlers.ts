@@ -534,6 +534,13 @@ export async function handleInputOffer(
 		() => {
 			logger.info(`Input connection closed: ${sessionId}`)
 			inputConnections.delete(sessionId)
+			pushEvent(sessionId, "stream-error", {
+				type: "input-closed",
+				message: "Input connection closed",
+			})
+		},
+		(errorType, message) => {
+			pushEvent(sessionId, "stream-error", { type: errorType, message })
 		},
 	)
 	inputConnections.set(sessionId, inputPc)

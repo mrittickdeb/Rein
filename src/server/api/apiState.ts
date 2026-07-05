@@ -88,7 +88,13 @@ export function ensureHostRunnerActive(localBaseUrl: string): HostRunner {
 		const localToken = getActiveToken() ?? generateToken()
 		storeToken(localToken)
 
-		const runner = new HostRunner(localBaseUrl, localToken)
+		const runner = new HostRunner(
+			localBaseUrl,
+			localToken,
+			(sessionId, errorType, message) => {
+				pushEvent(sessionId, "stream-error", { type: errorType, message })
+			},
+		)
 		setRunnerInstance(runner)
 		setHostStatus("running")
 		logger.info("GStreamer HostRunner is running")

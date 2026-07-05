@@ -9,13 +9,13 @@ import os from "node:os"
 import logger from "../../utils/logger"
 import { ImplementDbus } from "./utils"
 export interface CaptureProvider {
-	initialize(): Promise<void>
+	initialize(onFailure?: (err: Error) => void): Promise<void>
 	getGStreamerSource(): Promise<string[]>
 	dispose(): Promise<void>
 }
 
 export class WindowsCaptureProvider implements CaptureProvider {
-	public async initialize(): Promise<void> {
+	public async initialize(_onFailure?: (err: Error) => void): Promise<void> {
 		logger.info("Initialized DXGI capture")
 	}
 
@@ -38,7 +38,7 @@ export class WindowsCaptureProvider implements CaptureProvider {
 }
 
 export class LinuxX11CaptureProvider implements CaptureProvider {
-	public async initialize(): Promise<void> {
+	public async initialize(_onFailure?: (err: Error) => void): Promise<void> {
 		logger.info("Initialized X11 capture")
 	}
 
@@ -56,7 +56,7 @@ export class LinuxX11CaptureProvider implements CaptureProvider {
 }
 
 export class MacOSCaptureProvider implements CaptureProvider {
-	public async initialize(): Promise<void> {
+	public async initialize(_onFailure?: (err: Error) => void): Promise<void> {
 		logger.info("Initialized AVFoundation capture")
 	}
 
@@ -69,10 +69,19 @@ export class MacOSCaptureProvider implements CaptureProvider {
 
 export class LinuxWaylandPortalCaptureProvider implements CaptureProvider {
 	private readonly dbus = new ImplementDbus()
-	public async initialize(): Promise<void> {
+	private initialized = false
+	public async initialize(onFailure?: (err: Error) => void): Promise<void> {
 		logger.info("Initializing Wayland Portal capture")
+		if (onFailure) {
+			this.dbus.onFailure = (err) => {
+				if (this.initialized) {
+					onFailure(err)
+				}
+			}
+		}
 		try {
 			await this.dbus.initializeDbus()
+			this.initialized = true
 		} catch (error) {
 			logger.error(
 				`Wayland portal initialization failed: ${error instanceof Error ? error.message : String(error)}`,

@@ -96,7 +96,17 @@ export class GstManager extends EventEmitter {
 
 		try {
 			this.provider = createCaptureProvider()
-			await this.provider.initialize()
+			await this.provider.initialize(async (err) => {
+				logger.error(`Capture provider failed after startup: ${err.message}`)
+				if (this.process) {
+					this.intentionalStop = true
+					this.stop()
+					await this.cleanup()
+				} else {
+					await this.cleanup()
+				}
+				this.emit("capture-failure", err)
+			})
 			const sourceBlocks = await this.provider.getGStreamerSource()
 			const pipelineArgs = this.buildPipelineArgs(sourceBlocks, token, whipPort)
 			this.executePipeline(pipelineArgs, whipPort, token)

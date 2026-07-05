@@ -24,8 +24,10 @@ export class ImplementDbus {
 	public dbusConnection: SessionBus | null = null
 	private dbusModule: typeof import("dbus-next") | null = null
 	public pipewireNodeId: number | null = null
+	public onFailure?: (err: Error) => void
 
 	public dispose() {
+		this.onFailure = undefined
 		if (this.dbusConnection) {
 			this.dbusConnection.disconnect()
 			this.dbusConnection = null
@@ -38,10 +40,16 @@ export class ImplementDbus {
 
 		this.dbusConnection.on("error", (err: Error) => {
 			logger.error(`DBus error: ${err.stack}`)
+			if (this.onFailure) {
+				this.onFailure(err)
+			}
 		})
 
 		this.dbusConnection.on("close", () => {
 			logger.error("DBus connection closed")
+			if (this.onFailure) {
+				this.onFailure(new Error("Wayland D-Bus connection closed"))
+			}
 		})
 		await this.negotiateScreenCastPortal()
 	}
@@ -110,6 +118,30 @@ export class ImplementDbus {
 		if (!this.sessionPath) {
 			throw new Error(
 				"Failed to obtain a valid Wayland ScreenCast session path",
+			)
+		}
+
+		try {
+			const sessionObj = await this.dbusConnection.getProxyObject(
+				portalDest,
+				this.sessionPath,
+			)
+			const sessionInterface = sessionObj.getInterface(
+				"org.freedesktop.portal.Session",
+			)
+			sessionInterface.on("Closed", (results: unknown) => {
+				logger.warn(
+					`Wayland session closed via portal: ${JSON.stringify(results)}`,
+				)
+				if (this.onFailure) {
+					this.onFailure(
+						new Error("Wayland screen cast session closed by portal"),
+					)
+				}
+			})
+		} catch (err) {
+			logger.error(
+				`Failed to listen to Wayland session Closed signal: ${err instanceof Error ? err.message : String(err)}`,
 			)
 		}
 

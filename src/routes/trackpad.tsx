@@ -8,6 +8,7 @@ import { TouchArea } from "../components/Trackpad/TouchArea"
 import { useRemoteConnection } from "../hooks/useRemoteConnection"
 import { useTrackpadGesture } from "../hooks/useTrackpadGesture"
 import { ScreenMirror } from "../components/Trackpad/ScreenMirror"
+import { ErrorComponent } from "../components/Trackpad/ErrorComponent"
 import { useWebRtcStream } from "../hooks/useWebRtcStream"
 
 export const Route = createFileRoute("/trackpad")({
@@ -42,9 +43,10 @@ function TrackpadPage() {
 	const [keyboardOpen, setKeyboardOpen] = useState(false)
 	const [extraKeysVisible, setExtraKeysVisible] = useState(true)
 	const { status, send, sendCombo } = useRemoteConnection()
-	const { trackActive, videoStream } = useWebRtcStream({
-		token,
-	})
+	const { trackActive, videoStream, error, errorHandle, reconnect } =
+		useWebRtcStream({
+			token,
+		})
 
 	// Send input actions safely over WebRTC DataChannels
 	const broadcastMessage = (payload: unknown) => {
@@ -209,14 +211,22 @@ function TrackpadPage() {
 					scrollMode={scrollMode}
 					handlers={handlers}
 				/>
-				<ScreenMirror
-					isTracking={isTracking}
-					scrollMode={scrollMode}
-					handlers={handlers}
-					videoStream={videoStream}
-					trackActive={trackActive}
-					status={status}
-				/>
+				{error && errorHandle ? (
+					<ErrorComponent
+						error={error}
+						errorHandle={errorHandle}
+						onReconnect={reconnect}
+					/>
+				) : (
+					<ScreenMirror
+						isTracking={isTracking}
+						scrollMode={scrollMode}
+						handlers={handlers}
+						videoStream={videoStream}
+						trackActive={trackActive}
+						status={status}
+					/>
+				)}
 				{bufferText !== "" && <BufferBar bufferText={bufferText} />}
 			</div>
 

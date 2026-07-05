@@ -31,6 +31,7 @@ export class InputHandler {
 	private moveTimer: ReturnType<typeof setTimeout> | null = null
 	private scrollTimer: ReturnType<typeof setTimeout> | null = null
 	private throttleMs: number
+	private onError?: (errorType: string, message: string) => void
 
 	private config: InputConfig = {
 		sensitivity: 1.0,
@@ -40,9 +41,14 @@ export class InputHandler {
 		screenHeight: DEFAULT_SCREEN_HEIGHT,
 	}
 
-	constructor(config: Partial<InputConfig> = {}, throttleMs = 8) {
+	constructor(
+		config: Partial<InputConfig> = {},
+		throttleMs = 8,
+		onError?: (errorType: string, message: string) => void,
+	) {
 		this.throttleMs = throttleMs
 		this.config = { ...this.config, ...config }
+		this.onError = onError
 
 		const plat = os.platform()
 		try {
@@ -62,13 +68,21 @@ export class InputHandler {
 				this.injector = new MacInputInjector(this.config) as PlatformInjector
 			} else {
 				this.platform = "other"
-				console.warn(`[InputHandler] Unsupported platform: ${plat}`)
+				const msg = `Unsupported platform: ${plat}`
+				console.warn(`[InputHandler] ${msg}`)
 				this.injector = createStubInjector()
+				if (this.onError) {
+					this.onError("unsupported-platform", msg)
+				}
 			}
 		} catch (e) {
 			this.injector = createStubInjector()
 			this.platform = "other"
+			const errMsg = `Input injector initialization failed: ${e instanceof Error ? e.message : String(e)}`
 			console.warn(e)
+			if (this.onError) {
+				this.onError("input-injector-init-failed", errMsg)
+			}
 		}
 	}
 
@@ -92,10 +106,14 @@ export class InputHandler {
 		try {
 			this.dispatch(msg)
 		} catch (err: unknown) {
-			console.error(
-				`[InputHandler] Error handling ${msg.type} event:`,
-				err instanceof Error ? err.message : err,
-			)
+			const errMsg = err instanceof Error ? err.message : String(err)
+			console.error(`[InputHandler] Error handling ${msg.type} event:`, errMsg)
+			if (this.onError) {
+				this.onError(
+					"input-dispatch-error",
+					`Input dispatch error on ${msg.type}: ${errMsg}`,
+				)
+			}
 			// Safety: release mouse button if a click-down throws
 			if (msg.type === "click" && msg.press && isValidButton(msg.button)) {
 				try {

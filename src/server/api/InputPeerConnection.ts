@@ -34,9 +34,14 @@ export class InputPeerConnection {
 		onLocalCandidate?: (candidate: string, mid: string) => void,
 		initialConfig?: Partial<InputConfig>,
 		onClosed?: () => void,
+		onError?: (errorType: string, message: string) => void,
 	) {
 		this.sessionId = sessionId
-		this.inputHandler = new InputHandler(initialConfig)
+		this.inputHandler = new InputHandler(
+			initialConfig,
+			8,
+			onError ? (errorType, message) => onError(errorType, message) : undefined,
+		)
 
 		this.pc = new nodeDataChannel.PeerConnection(`input-${sessionId}`, {
 			iceServers: [],
@@ -71,6 +76,9 @@ export class InputPeerConnection {
 
 					if (!parsed.type || !VALID_INPUT_TYPES.has(parsed.type)) {
 						logger.warn(`[Input] Unknown type: ${parsed.type}`)
+						if (onError) {
+							onError("unknown-input", `Unknown input type: ${parsed.type}`)
+						}
 						return
 					}
 

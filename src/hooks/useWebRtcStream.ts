@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useRef, useState } from "react"
+import { useCallback, useEffect, useRef, useState } from "react"
 import { useConnection } from "../contexts/ConnectionProvider"
 
 interface UseWebRtcStreamOptions {
@@ -11,18 +11,93 @@ export function useWebRtcStream({ token }: UseWebRtcStreamOptions) {
 	const [trackActive, setTrackActive] = useState(false)
 	const [videoStream, setVideoStream] = useState<MediaStream | null>(null)
 	const [activeSessionId, setActiveSessionId] = useState<string | null>(null)
+	const [error, setError] = useState<string | null>(null)
+	const [errorHandle, setErrorHandle] = useState<string | null>(null)
+	const [reconnectAttempt, setReconnectAttempt] = useState(0)
 	const { registerDataChannel, send: sendInputEvent } = useConnection()
 
 	const videoPcRef = useRef<RTCPeerConnection | null>(null)
 	const inputPcRef = useRef<RTCPeerConnection | null>(null)
 	const sseSourceRef = useRef<EventSource | null>(null)
+	const retryTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+	const trackActiveRef = useRef(false)
+
+	useEffect(() => {
+		trackActiveRef.current = trackActive
+	}, [trackActive])
+
+	useEffect(() => {
+		return () => {
+			if (retryTimerRef.current) {
+				clearTimeout(retryTimerRef.current)
+			}
+		}
+	}, [])
+
+	const checkServerActive = useCallback(async (): Promise<boolean> => {
+		try {
+			const headers: Record<string, string> = {}
+			if (token) {
+				headers.Authorization = `Bearer ${token}`
+			}
+			const controller = new AbortController()
+			const timeoutId = setTimeout(() => controller.abort(), 2000)
+			const response = await fetch("/api/host/status", {
+				headers,
+				signal: controller.signal,
+			})
+			clearTimeout(timeoutId)
+			return response.ok
+		} catch {
+			return false
+		}
+	}, [token])
+
+	const triggerRetry = useCallback(() => {
+		if (retryTimerRef.current) return
+
+		setTrackActive(false)
+		setVideoStream(null)
+
+		console.log(
+			"[WebRTC] Startup/transient network failure, retrying automatically in 2 seconds...",
+		)
+		retryTimerRef.current = setTimeout(() => {
+			retryTimerRef.current = null
+			setActiveSessionId(null)
+			setReconnectAttempt((prev) => prev + 1)
+		}, 2000)
+	}, [])
+
+	const handleNetworkFailure = useCallback(async () => {
+		const isServerOnline = await checkServerActive()
+		if (isServerOnline) {
+			triggerRetry()
+		} else {
+			setErrorHandle("Server Error")
+			setError("Server has quit or is unreachable")
+		}
+	}, [checkServerActive, triggerRetry])
+
+	const reconnect = () => {
+		if (retryTimerRef.current) {
+			clearTimeout(retryTimerRef.current)
+			retryTimerRef.current = null
+		}
+		setErrorHandle(null)
+		setError(null)
+		setTrackActive(false)
+		setVideoStream(null)
+		setActiveSessionId(null)
+		setReconnectAttempt((prev) => prev + 1)
+	}
 
 	// Session provisioning
 	useEffect(() => {
 		const urlParams = new URLSearchParams(window.location.search)
 		const querySessionId = urlParams.get("session")
 
-		if (querySessionId) {
+		if (querySessionId && reconnectAttempt === 0) {
 			setActiveSessionId(querySessionId)
 			return
 		}
@@ -34,10 +109,19 @@ export function useWebRtcStream({ token }: UseWebRtcStreamOptions) {
 		})
 			.then((r) => r.json())
 			.then((data) => {
-				if (data.sessionId) setActiveSessionId(data.sessionId)
+				if (data.sessionId) {
+					setActiveSessionId(data.sessionId)
+					// Update URL query param with new sessionId
+					const newUrl = new URL(window.location.href)
+					newUrl.searchParams.set("session", data.sessionId)
+					window.history.replaceState({}, "", newUrl.toString())
+				}
 			})
-			.catch((err) => console.error("[WebRTC] Session init failed:", err))
-	}, [token])
+			.catch((err) => {
+				console.error("[WebRTC] Session init failed:", err)
+				handleNetworkFailure()
+			})
+	}, [token, reconnectAttempt, handleNetworkFailure])
 
 	useEffect(() => {
 		if (!activeSessionId) return
@@ -72,7 +156,19 @@ export function useWebRtcStream({ token }: UseWebRtcStreamOptions) {
 					sdpMid: event.candidate.sdpMid,
 					sdpMLineIndex: event.candidate.sdpMLineIndex,
 				}),
-			}).catch(console.error)
+			}).catch((err) => {
+				console.error(err)
+				handleNetworkFailure()
+			})
+		}
+
+		videoPc.onconnectionstatechange = () => {
+			if (
+				videoPc.connectionState === "failed" ||
+				videoPc.connectionState === "disconnected"
+			) {
+				handleNetworkFailure()
+			}
 		}
 
 		// ── Input PC: DataChannel only, no media ─────────────────────────────
@@ -103,7 +199,19 @@ export function useWebRtcStream({ token }: UseWebRtcStreamOptions) {
 					sdpMid: event.candidate.sdpMid,
 					sdpMLineIndex: event.candidate.sdpMLineIndex,
 				}),
-			}).catch(console.error)
+			}).catch((err) => {
+				console.error(err)
+				handleNetworkFailure()
+			})
+		}
+
+		inputPc.onconnectionstatechange = () => {
+			if (
+				inputPc.connectionState === "failed" ||
+				inputPc.connectionState === "disconnected"
+			) {
+				handleNetworkFailure()
+			}
 		}
 
 		// ── SSE bridge: handles both video offer and input-answer ────────────
@@ -115,6 +223,22 @@ export function useWebRtcStream({ token }: UseWebRtcStreamOptions) {
 
 		const videoIceQueue: RTCIceCandidateInit[] = []
 		const inputIceQueue: RTCIceCandidateInit[] = []
+
+		sse.onerror = (event) => {
+			console.error("[WebRTC] SSE error:", event)
+			handleNetworkFailure()
+		}
+
+		sse.addEventListener("stream-error", (event) => {
+			try {
+				const data = JSON.parse(event.data)
+				setErrorHandle("Network Error")
+				setError(data.message || `Stream error: ${data.type}`)
+			} catch {
+				setErrorHandle("Network Error")
+				setError("Stream error occurred")
+			}
+		})
 
 		// Video: GStreamer offers, browser answers
 		sse.addEventListener("offer", async (event) => {
@@ -145,6 +269,7 @@ export function useWebRtcStream({ token }: UseWebRtcStreamOptions) {
 				}
 			} catch (err) {
 				console.error("[WebRTC] Video offer handling failed:", err)
+				handleNetworkFailure()
 			}
 		})
 
@@ -190,6 +315,7 @@ export function useWebRtcStream({ token }: UseWebRtcStreamOptions) {
 				}
 			} catch (err) {
 				console.error("[WebRTC] Input answer failed:", err)
+				handleNetworkFailure()
 			}
 		})
 
@@ -228,16 +354,60 @@ export function useWebRtcStream({ token }: UseWebRtcStreamOptions) {
 			}
 		}
 
-		sendInputOffer().catch(console.error)
+		sendInputOffer().catch((err) => {
+			console.error(err)
+			handleNetworkFailure()
+		})
+
+		// Video stream watchdog to automatically recover from silent stream freezes
+		let lastBytesReceived = 0
+		let lastBytesTime = Date.now()
+
+		const statsInterval = setInterval(async () => {
+			if (!trackActiveRef.current) return
+			try {
+				const stats = await videoPc.getStats()
+				let videoInbound = null
+				for (const report of stats.values()) {
+					if (report.type === "inbound-rtp" && report.kind === "video") {
+						videoInbound = report
+						break
+					}
+				}
+				if (videoInbound) {
+					const bytes = videoInbound.bytesReceived
+					const now = Date.now()
+					if (bytes > lastBytesReceived) {
+						lastBytesReceived = bytes
+						lastBytesTime = now
+					} else if (now - lastBytesTime > 4000) {
+						console.warn(
+							"[WebRTC] Video stream freeze detected (no bytes received for 4s), reconnecting...",
+						)
+						handleNetworkFailure()
+					}
+				}
+			} catch (err) {
+				console.error("[WebRTC] Failed to fetch stats:", err)
+			}
+		}, 2000)
 
 		return () => {
+			clearInterval(statsInterval)
 			sse.close()
 			videoPc.close()
 			inputPc.close()
 			setTrackActive(false)
 			setVideoStream(null)
 		}
-	}, [activeSessionId, token, registerDataChannel])
+	}, [activeSessionId, token, registerDataChannel, handleNetworkFailure])
 
-	return { trackActive, videoStream, sendInputEvent }
+	return {
+		trackActive,
+		videoStream,
+		error,
+		errorHandle,
+		reconnect,
+		sendInputEvent,
+	}
 }
