@@ -108,12 +108,6 @@ export class InputHandler {
 		} catch (err: unknown) {
 			const errMsg = err instanceof Error ? err.message : String(err)
 			console.error(`[InputHandler] Error handling ${msg.type} event:`, errMsg)
-			if (this.onError) {
-				this.onError(
-					"input-dispatch-error",
-					`Input dispatch error on ${msg.type}: ${errMsg}`,
-				)
-			}
 			// Safety: release mouse button if a click-down throws
 			if (msg.type === "click" && msg.press && isValidButton(msg.button)) {
 				try {

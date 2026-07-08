@@ -76,9 +76,6 @@ export class InputPeerConnection {
 
 					if (!parsed.type || !VALID_INPUT_TYPES.has(parsed.type)) {
 						logger.warn(`[Input] Unknown type: ${parsed.type}`)
-						if (onError) {
-							onError("unknown-input", `Unknown input type: ${parsed.type}`)
-						}
 						return
 					}
 

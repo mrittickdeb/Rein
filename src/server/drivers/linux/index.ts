@@ -263,7 +263,7 @@ export class LinuxInputInjector {
 			console.error(
 				"[LinuxInputInjector] One or more devices failed to initialize",
 			)
-			// Partial init
+			this.destroy()
 			this.initialized = mouseOk
 			return
 		}

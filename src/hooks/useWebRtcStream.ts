@@ -6,6 +6,7 @@ import { useConnection } from "../contexts/ConnectionProvider"
 interface UseWebRtcStreamOptions {
 	token: string | null
 }
+const MAX_RETRIES = 5
 
 export function useWebRtcStream({ token }: UseWebRtcStreamOptions) {
 	const [trackActive, setTrackActive] = useState(false)
@@ -21,6 +22,7 @@ export function useWebRtcStream({ token }: UseWebRtcStreamOptions) {
 	const sseSourceRef = useRef<EventSource | null>(null)
 	const retryTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 	const trackActiveRef = useRef(false)
+	const retryCountRef = useRef(0)
 
 	useEffect(() => {
 		trackActiveRef.current = trackActive
@@ -56,17 +58,42 @@ export function useWebRtcStream({ token }: UseWebRtcStreamOptions) {
 	const triggerRetry = useCallback(() => {
 		if (retryTimerRef.current) return
 
+		if (retryCountRef.current >= MAX_RETRIES) {
+			console.warn(
+				`[WebRTC] Max retry attempts (${MAX_RETRIES}) reached. Stopping retries.`,
+			)
+			setErrorHandle("Connection Failed")
+			setError("Failed to establish stream session after multiple attempts")
+			return
+		}
+
+		if (sseSourceRef.current) {
+			sseSourceRef.current.close()
+			sseSourceRef.current = null
+		}
+		if (videoPcRef.current) {
+			videoPcRef.current.close()
+			videoPcRef.current = null
+		}
+		if (inputPcRef.current) {
+			inputPcRef.current.close()
+			inputPcRef.current = null
+		}
+
 		setTrackActive(false)
 		setVideoStream(null)
+		setActiveSessionId(null)
+
+		const backoffDelay = Math.min(2000 * 2 ** retryCountRef.current, 30000)
 
 		console.log(
-			"[WebRTC] Startup/transient network failure, retrying automatically in 2 seconds...",
+			`[WebRTC] Startup/transient network failure, retrying automatically (attempt ${retryCountRef.current + 1}/${MAX_RETRIES}) in ${backoffDelay / 1000} seconds...`,
 		)
 		retryTimerRef.current = setTimeout(() => {
 			retryTimerRef.current = null
-			setActiveSessionId(null)
+			retryCountRef.current += 1
 			setReconnectAttempt((prev) => prev + 1)
-		}, 2000)
+		}, backoffDelay)
 	}, [])
 
 	const handleNetworkFailure = useCallback(async () => {
@@ -84,11 +111,24 @@ export function useWebRtcStream({ token }: UseWebRtcStreamOptions) {
 			clearTimeout(retryTimerRef.current)
 			retryTimerRef.current = null
 		}
+		if (sseSourceRef.current) {
+			sseSourceRef.current.close()
+			sseSourceRef.current = null
+		}
+		if (videoPcRef.current) {
+			videoPcRef.current.close()
+			videoPcRef.current = null
+		}
+		if (inputPcRef.current) {
+			inputPcRef.current.close()
+			inputPcRef.current = null
+		}
 		setErrorHandle(null)
 		setError(null)
 		setTrackActive(false)
 		setVideoStream(null)
 		setActiveSessionId(null)
+		retryCountRef.current = 0
 		setReconnectAttempt((prev) => prev + 1)
 	}
 
@@ -107,7 +147,12 @@ export function useWebRtcStream({ token }: UseWebRtcStreamOptions) {
 			method: "POST",
 			headers: { Authorization: `Bearer ${token}` },
 		})
-			.then((r) => r.json())
+			.then((r) => {
+				if (!r.ok) {
+					throw new Error(`Session creation failed with status ${r.status}`)
+				}
+				return r.json()
+			})
 			.then((data) => {
 				if (data.sessionId) {
 					setActiveSessionId(data.sessionId)
@@ -115,6 +160,8 @@ export function useWebRtcStream({ token }: UseWebRtcStreamOptions) {
 					const newUrl = new URL(window.location.href)
 					newUrl.searchParams.set("session", data.sessionId)
 					window.history.replaceState({}, "", newUrl.toString())
+				} else {
+					throw new Error("Session ID missing from response")
 				}
 			})
 			.catch((err) => {
@@ -138,38 +185,46 @@ export function useWebRtcStream({ token }: UseWebRtcStreamOptions) {
 			if (event.track.kind === "video" && event.streams[0]) {
 				setVideoStream(event.streams[0])
 				setTrackActive(true)
+				retryCountRef.current = 0
 			}
 		}
 
 		videoPc.onicecandidate = async (event) => {
 			if (!event.candidate) return
-			await fetch("/api/webrtc/ice", {
-				method: "POST",
-				headers: {
-					"Content-Type": "application/json",
-					...(token ? { Authorization: `Bearer ${token}` } : {}),
-				},
-				body: JSON.stringify({
-					sessionId: activeSessionId,
-					from: "viewer",
-					candidate: event.candidate.candidate,
-					sdpMid: event.candidate.sdpMid,
-					sdpMLineIndex: event.candidate.sdpMLineIndex,
-				}),
-			}).catch((err) => {
+			try {
+				const response = await fetch("/api/webrtc/ice", {
+					method: "POST",
+					headers: {
+						"Content-Type": "application/json",
+						...(token ? { Authorization: `Bearer ${token}` } : {}),
+					},
+					body: JSON.stringify({
+						sessionId: activeSessionId,
+						from: "viewer",
+						candidate: event.candidate.candidate,
+						sdpMid: event.candidate.sdpMid,
+						sdpMLineIndex: event.candidate.sdpMLineIndex,
+					}),
+				})
+				if (!response.ok) {
+					throw new Error(`ICE candidate post failed: ${response.status}`)
+				}
+			} catch (err) {
 				console.error(err)
 				handleNetworkFailure()
-			})
+			}
 		}
 
-		videoPc.onconnectionstatechange = () => {
+		const handleConnectionStateChange = (pc: RTCPeerConnection) => () => {
 			if (
-				videoPc.connectionState === "failed" ||
-				videoPc.connectionState === "disconnected"
+				pc.connectionState === "failed" ||
+				pc.connectionState === "disconnected"
 			) {
 				handleNetworkFailure()
 			}
 		}
+
+		videoPc.onconnectionstatechange = handleConnectionStateChange(videoPc)
 
 		// ── Input PC: DataChannel only, no media ─────────────────────────────
 		const inputPc = new RTCPeerConnection({ iceServers: [] })
@@ -186,33 +241,31 @@ export function useWebRtcStream({ token }: UseWebRtcStreamOptions) {
 
 		inputPc.onicecandidate = async (event) => {
 			if (!event.candidate) return
-			await fetch("/api/webrtc/ice", {
-				method: "POST",
-				headers: {
-					"Content-Type": "application/json",
-					...(token ? { Authorization: `Bearer ${token}` } : {}),
-				},
-				body: JSON.stringify({
-					sessionId: activeSessionId,
-					from: "viewer-input",
-					candidate: event.candidate.candidate,
-					sdpMid: event.candidate.sdpMid,
-					sdpMLineIndex: event.candidate.sdpMLineIndex,
-				}),
-			}).catch((err) => {
+			try {
+				const response = await fetch("/api/webrtc/ice", {
+					method: "POST",
+					headers: {
+						"Content-Type": "application/json",
+						...(token ? { Authorization: `Bearer ${token}` } : {}),
+					},
+					body: JSON.stringify({
+						sessionId: activeSessionId,
+						from: "viewer-input",
+						candidate: event.candidate.candidate,
+						sdpMid: event.candidate.sdpMid,
+						sdpMLineIndex: event.candidate.sdpMLineIndex,
+					}),
+				})
+				if (!response.ok) {
+					throw new Error(`ICE candidate post failed: ${response.status}`)
+				}
+			} catch (err) {
 				console.error(err)
-				handleNetworkFailure()
-			})
-		}
-
-		inputPc.onconnectionstatechange = () => {
-			if (
-				inputPc.connectionState === "failed" ||
-				inputPc.connectionState === "disconnected"
-			) {
 				handleNetworkFailure()
 			}
 		}
+
+		inputPc.onconnectionstatechange = handleConnectionStateChange(inputPc)
 
 		// ── SSE bridge: handles both video offer and input-answer ────────────
 		const sseParams = new URLSearchParams({ sessionId: activeSessionId })
@@ -225,6 +278,7 @@ export function useWebRtcStream({ token }: UseWebRtcStreamOptions) {
 		const inputIceQueue: RTCIceCandidateInit[] = []
 
 		sse.onerror = (event) => {
+			sse.close()
 			console.error("[WebRTC] SSE error:", event)
 			handleNetworkFailure()
 		}
@@ -250,7 +304,7 @@ export function useWebRtcStream({ token }: UseWebRtcStreamOptions) {
 				)
 				const answer = await videoPc.createAnswer()
 				await videoPc.setLocalDescription(answer)
-				await fetch("/api/webrtc/answer", {
+				const response = await fetch("/api/webrtc/answer", {
 					method: "POST",
 					headers: {
 						"Content-Type": "application/json",
@@ -258,6 +312,9 @@ export function useWebRtcStream({ token }: UseWebRtcStreamOptions) {
 					},
 					body: JSON.stringify({ sessionId: activeSessionId, sdp: answer.sdp }),
 				})
+				if (!response.ok) {
+					throw new Error(`Answer post failed: ${response.status}`)
+				}
 				// Process queued video candidates
 				while (videoIceQueue.length > 0) {
 					const cand = videoIceQueue.shift()
@@ -362,9 +419,10 @@ export function useWebRtcStream({ token }: UseWebRtcStreamOptions) {
 		// Video stream watchdog to automatically recover from silent stream freezes
 		let lastBytesReceived = 0
 		let lastBytesTime = Date.now()
+		const cancelled = false
 
 		const statsInterval = setInterval(async () => {
-			if (!trackActiveRef.current) return
+			if (cancelled || !trackActiveRef.current) return
 			try {
 				const stats = await videoPc.getStats()
 				let videoInbound = null

@@ -10,6 +10,7 @@ import logger from "../../utils/logger"
 
 export class HostRunner {
 	private activeSessions = new Map<string, GstManager>()
+	private stoppingSessions = new Set<string>()
 	private token: string
 	private serverPort: number
 	private onStreamError?: (
@@ -51,7 +52,13 @@ export class HostRunner {
 		this.activeSessions.set(sessionId, gst)
 
 		gst.on("exit", () => {
+			const wasIntentional = this.stoppingSessions.has(sessionId)
 			this.activeSessions.delete(sessionId)
+			this.stoppingSessions.delete(sessionId)
+			if (wasIntentional) {
+				logger.info(`GStreamer pipeline stopped for session: ${sessionId}`)
+				return
+			}
 			if (this.onStreamError) {
 				this.onStreamError(
 					sessionId,
@@ -74,20 +81,12 @@ export class HostRunner {
 			}
 		})
 
-		gst.start(this.token, this.serverPort).catch((err) => {
-			logger.error(`Failed to launch GstManager: ${String(err)}`)
-			if (this.onStreamError) {
-				this.onStreamError(
-					sessionId,
-					"gst-launch-error",
-					`Failed to launch GStreamer: ${String(err)}`,
-				)
-			}
-		})
+		void gst.start(this.token, this.serverPort)
 	}
 
 	public shutdown(): void {
-		for (const [_, manager] of this.activeSessions.entries()) {
+		for (const [sessionId, manager] of this.activeSessions.entries()) {
+			this.stoppingSessions.add(sessionId)
 			manager.stop()
 		}
 		this.activeSessions.clear()

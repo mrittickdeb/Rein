@@ -13,6 +13,10 @@ export const i18n = {
 			settingUpScreen: "Setting up screen sharing",
 			checkNetwork: "Attempting to connect to the host.",
 		},
+		errorComponent: {
+			unknownError: "Unknown Error",
+			unexpectedNetworkError: "An unexpected network error occurred.",
+		},
 	},
 } as const
 
